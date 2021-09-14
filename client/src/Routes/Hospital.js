@@ -3,7 +3,6 @@ import ipfs from '../Components/ipfs'
 import {Table,TableHead,TableContainer,TableBody,TableCell,TableRow,Chip,Card,Grid,Box,Paper, Typography,TextField, Button,CircularProgress} from '@material-ui/core';
 import Header from '../Components/Header'
 import InitializeWeb3 from '../Components/web3'
-import { useLocation } from 'react-router-dom'
 
 var CryptoJS = require('crypto-js')
 
@@ -72,9 +71,11 @@ class Hospital extends Component {
     }
   }
 
-  onPatientAddressChange = (e) => {
-    this.setState({patientAddress: e.target.value})
-  }
+  onPatientAddressChange = (e) => this.setState({patientAddress: e.target.value})
+  onHospitalNameChange = (e) => this.setState({hospitalName: e.target.value})
+  onReasonChange = (e) => this.setState({reason: e.target.value})
+  onAdmittedOnChange = (e) => this.setState({admittedOn: e.target.value})
+  onDischargedOnChamge = (e) => this.setState({dischargedOn: e.target.value})
 
   getHospitalInformation = async () => {
     this.setState({viewH: false, load: true})
@@ -111,6 +112,32 @@ class Hospital extends Component {
       })
     }
     this.setState({records: recs, load: false, recordView: true})
+  }
+
+  captureFile =(event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    const file = event.target.files[0];
+    let reader = new window.FileReader();
+    reader.readAsArrayBuffer(file);
+    reader.onloadend = () => this.convertToBuffer(reader);    
+  };
+  convertToBuffer = async(reader) => {
+      const buffer = Buffer.from(reader.result);
+      this.setState({buffer});
+  };
+
+  onOtherRecordSubmit = async () => {
+    this.setState({load: true, addOtherRecordView: false})
+    let res = await ipfs.add(this.state.buffer)
+    let url="https://ipfs.io/ipfs/"+res[0].hash;
+    var cypherText = encode(CryptoJS.AES.encrypt(JSON.stringify(url), 'dmr').toString());
+    var decryptedtext = CryptoJS.AES.decrypt(decode(cypherText).toString(), 'dmr').toString(CryptoJS.enc.Utf8);
+    this.setState({ipfs: url.toString()})
+    await this.state.PatientInstance.methods.addRecord(this.state.patientAddress, this.state.hospitalName, this.state.reason, this.state.admittedOn, this.state.dischargedOn, cypherText)
+    .send({from: this.state.account})
+
+    this.setState({load: false})
   }
 
   isLoading = () => {
@@ -237,6 +264,34 @@ class Hospital extends Component {
     }
   }
 
+
+  addOtherRecords = () => {
+    if(this.state.addOtherRecordView) {
+      return (
+        <Grid container justifyContent="center">
+          <Grid item>
+            <Paper>
+              <Box m={3} p={5} alignItems="center">
+                <Box display="flex" alignItems="center" justifyContent="center"><Typography>Add Records</Typography></Box>
+                <Box><TextField label="Patient Address" onChange={this.onPatientAddressChange}></TextField></Box>
+                <Box><TextField label="Hospital Name" onChange={this.onHospitalNameChange}></TextField></Box>
+                <Box><TextField label="Visit Name" onChange={this.onReasonChange}></TextField></Box>
+                <Box><TextField type="date" label="Admitted On" onChange={this.onAdmittedOnChange} InputLabelProps={{ shrink: true }}></TextField></Box>
+                <Box><TextField type="date" label="Discharged On" onChange={this.onDischargedOnChamge} InputLabelProps={{ shrink: true }}></TextField></Box>
+                <Box display="flex" alignItems="center" justifyContent="center" mt={2} mb={2}>
+                  <TextField type="file" inputProps={{accept:"application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"}} label="Report" InputLabelProps={{ shrink: true }} onChange={this.captureFile}></TextField>
+                </Box>   
+                <Box display="flex" alignItems="center" justifyContent="center" mb={1}>
+                  <Button onClick={this.onOtherRecordSubmit} variant="contained" style={{backgroundColor:"green",color:"floralwhite"}}>Submit</Button>"
+                </Box>
+              </Box>
+            </Paper>
+          </Grid>
+        </Grid>
+      )
+    }
+  }
+
   viewHospital = () => {
     if(this.state.viewH) {
       return (
@@ -299,7 +354,7 @@ class Hospital extends Component {
         {this.onViewPatient()}
         {this.viewPatientDetails()}
         {this.viewPatientRecords()}
-
+        {this.addOtherRecords()}
       </Box>
       </>
     )
